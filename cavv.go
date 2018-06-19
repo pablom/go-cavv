@@ -8,6 +8,8 @@ import (
     "strings"
     "regexp"
     "strconv"
+    "math/rand"
+    "time"
 )
 
 /*
@@ -102,6 +104,12 @@ Table D–7: Assembling CAVV Data Field
 
 */
 
+
+func rangeIn(low, hi int) int {
+    rand.Seed(time.Now().Unix())
+    return low + rand.Intn(hi-low)
+}
+
 func dec2bcd(i uint64) []byte {
     var bcd []byte
     for i > 0 {
@@ -172,7 +180,7 @@ func createKeyCipher(key []byte) (cipher.Block, error) {
             • Second Factor: A value based on the result of Authentication Code Second Factor
                 Authentication. (2 digits)
 ******************************************************************************************/
-func GenerateVisaCavvOutput( pan, atn, scode string,  keyA, keyB []byte ) (int, error) {
+func generateVisaCavvOutput( pan, atn, scode string,  keyA, keyB []byte ) (int, error) {
 
     var cvv2 string = ""
 
@@ -259,7 +267,31 @@ func GenerateVisaCavvOutput( pan, atn, scode string,  keyA, keyB []byte ) (int, 
 
     return icvv2, nil
 }
+/****************************************************************************************
 
-func GenerateVisaCavv( pan, atn, scode string,  keyA, keyB []byte ) ([]byte, error) {
+******************************************************************************************/
+func GenerateVisaCavv( pan string, iatn uint, arc uint8, sacode uint8,  keyA, keyB []byte ) ([]byte, error) {
+
+    /* Check Authentication Results Code */
+    if arc > 9 || arc < 0 {
+        return nil, fmt.Errorf("Invalid Authentication Results Code: %d", arc)
+    }
+    /* Convert atn as integer to string */
+    atn := fmt.Sprintf("%d", iatn)
+    /* Calculate ATN string length */
+    alen := len(atn)
+    /* Check ATN length */
+    if alen < 4 {
+        return nil, fmt.Errorf("Invalid Authentication Tracking Number (ATN) length: %d, expected: 16", alen)
+    }
+    /* Create service code from Authentication Results Code & Second Factor */
+    scode := fmt.Sprintf("%1d%02d", arc, sacode)
+    /* Generate CAVV output */
+    cvv2,err := generateVisaCavvOutput(pan, atn[alen-4:], scode, keyA, keyB)
+    if err != nil {
+        return nil, err
+    }
+
+    fmt.Printf("ATN = %s\nATN4 = %s\nCVV2 = %d\n", atn, atn[alen-4:], cvv2)
     return nil,nil
 }
