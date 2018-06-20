@@ -8,8 +8,6 @@ import (
     "strings"
     "regexp"
     "strconv"
-    "math/rand"
-    "time"
 )
 
 /*
@@ -104,25 +102,6 @@ Table D–7: Assembling CAVV Data Field
 
 */
 
-
-func rangeIn(low, hi int) int {
-    rand.Seed(time.Now().Unix())
-    return low + rand.Intn(hi-low)
-}
-
-func dec2bcd(i uint64) []byte {
-    var bcd []byte
-    for i > 0 {
-        low := i % 10
-        i /= 10
-        hi := i % 10
-        i /= 10
-        var x []byte
-        x = append(x, byte((hi & 0xf) << 4)|byte(low&0xf))
-        bcd = append(x, bcd[:]...)
-    }
-    return bcd
-}
 /********************************************************
   Helper function to create cipher from key byte array
 ********************************************************/
@@ -270,7 +249,10 @@ func generateVisaCavvOutput( pan, atn, scode string,  keyA, keyB []byte ) (int, 
 /****************************************************************************************
 
 ******************************************************************************************/
-func GenerateVisaCavv( pan string, iatn uint, arc uint8, sacode uint8,  keyA, keyB []byte ) ([]byte, error) {
+func GenerateVisaCavv( pan string, /* Primary Account Number (PAN) */
+            iatn uint, /* 16-digit number ATN */
+            arc uint8, sacode, keyId uint8,
+            keyA, keyB []byte ) ([]byte, error) {
 
     /* Check Authentication Results Code */
     if arc > 9 || arc < 0 {
@@ -281,7 +263,7 @@ func GenerateVisaCavv( pan string, iatn uint, arc uint8, sacode uint8,  keyA, ke
     /* Calculate ATN string length */
     alen := len(atn)
     /* Check ATN length */
-    if alen < 4 {
+    if alen != 16 {
         return nil, fmt.Errorf("Invalid Authentication Tracking Number (ATN) length: %d, expected: 16", alen)
     }
     /* Create service code from Authentication Results Code & Second Factor */
@@ -292,6 +274,24 @@ func GenerateVisaCavv( pan string, iatn uint, arc uint8, sacode uint8,  keyA, ke
         return nil, err
     }
 
+    /* create CAVV destination buffer (20 bytes) */
+    cavv := make([]byte, 20)
+    /* Set Authentication Results Code */
+    cavv[0] = dec2bcd(uint64(arc))[0]
+    /* Set Second Factor Authentication Code */
+    cavv[1] = dec2bcd(uint64(sacode))[0]
+    /* Set CAVV Key Indicator */
+    cavv[2] = dec2bcd(uint64(keyId))[0]
+    /* Set CAVV output */
+    copy(cavv[3:], dec2bcd(uint64(cvv2))[:2])
+    /* Set Unpredictable Number */
+    atn4digit,_ := strconv.Atoi(atn[alen-4:])
+    copy(cavv[5:], dec2bcd(uint64(atn4digit))[:2])
+    /* Set ATN */
+    copy(cavv[7:], dec2bcd(uint64(iatn))[:8])
+    /* Set Version and Authentication Action */
+    cavv[15] = dec2bcd(uint64(0))[0]
+
     fmt.Printf("ATN = %s\nATN4 = %s\nCVV2 = %d\n", atn, atn[alen-4:], cvv2)
-    return nil,nil
+    return cavv,nil
 }
