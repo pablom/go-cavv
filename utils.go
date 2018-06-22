@@ -3,6 +3,8 @@ package gocavv
 import (
 	"math/rand"
 	"time"
+	"crypto/cipher"
+	"crypto/des"
 )
 
 func rangeIn(low, hi int) int {
@@ -28,4 +30,38 @@ func dec2bcd(i uint64) []byte {
 		bcd = append(x, bcd[:]...)
 	}
 	return bcd
+}
+/********************************************************
+  Helper function to create cipher from key byte array
+********************************************************/
+func createKeyCipher(key []byte) (cipher.Block, error) {
+	var err error
+	var cipher cipher.Block
+
+	/* Create cipher from keyA */
+	if len(key) != 24 {
+		var tripleDESKey []byte
+
+		if len(key) == 16 {
+			tripleDESKey = append(tripleDESKey, key[:16]...)
+			tripleDESKey = append(tripleDESKey, key[:8]...)
+		} else if len(key) == 8 {
+			tripleDESKey = append(tripleDESKey, key[:8]...)
+			tripleDESKey = append(tripleDESKey, key[:8]...)
+			tripleDESKey = append(tripleDESKey, key[:8]...)
+		} else {
+			return nil, des.KeySizeError(len(key))
+		}
+
+		cipher, err = des.NewTripleDESCipher(tripleDESKey)
+
+	} else {
+		cipher, err = des.NewTripleDESCipher(key)
+	}
+	/* Check return error */
+	if err != nil {
+		return nil, err
+	}
+
+	return cipher, nil
 }

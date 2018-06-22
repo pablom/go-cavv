@@ -1,8 +1,6 @@
 package gocavv
 
 import (
-    "crypto/cipher"
-    "crypto/des"
     "encoding/hex"
     "fmt"
     "strings"
@@ -102,40 +100,6 @@ Table D–7: Assembling CAVV Data Field
 
 */
 
-/********************************************************
-  Helper function to create cipher from key byte array
-********************************************************/
-func createKeyCipher(key []byte) (cipher.Block, error) {
-    var err error
-    var cipher cipher.Block
-
-    /* Create cipher from keyA */
-    if len(key) != 24 {
-        var tripleDESKey []byte
-
-        if len(key) == 16 {
-            tripleDESKey = append(tripleDESKey, key[:16]...)
-            tripleDESKey = append(tripleDESKey, key[:8]...)
-        } else if len(key) == 8 {
-            tripleDESKey = append(tripleDESKey, key[:8]...)
-            tripleDESKey = append(tripleDESKey, key[:8]...)
-            tripleDESKey = append(tripleDESKey, key[:8]...)
-        } else {
-            return nil, des.KeySizeError(len(key))
-        }
-
-        cipher, err = des.NewTripleDESCipher(tripleDESKey)
-
-    } else {
-        cipher, err = des.NewTripleDESCipher(key)
-    }
-    /* Check return error */
-    if err != nil {
-        return nil, err
-    }
-
-    return cipher, nil
-}
 /****************************************************************************************
     VISA: to calculate CAVV value (using CVV2 with ATN)
 
@@ -292,6 +256,5 @@ func GenerateVisaCavv( pan string, /* Primary Account Number (PAN) */
     /* Set Version and Authentication Action */
     cavv[15] = dec2bcd(uint64(0))[0]
 
-    fmt.Printf("ATN = %s\nATN4 = %s\nCVV2 = %d\n", atn, atn[alen-4:], cvv2)
     return cavv,nil
 }
