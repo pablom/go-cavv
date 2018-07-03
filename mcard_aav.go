@@ -104,10 +104,10 @@ func GenerateMCardAav( pan string, /* Primary Account Number (PAN) */
 	}
 
 	/* create AAV destination buffer (20 bytes) */
-	aav := make([]byte, 20)
+	//aav := make([]byte, 20)
 
 	/* Set Authentication Results Code */
-	aav[0] = dec2bcd(uint64(arc))[0]
+	//aav[0] = dec2bcd(uint64(arc))[0]
 
 	return nil, nil
 }
