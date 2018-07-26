@@ -31,8 +31,8 @@ var keyAM, _ = hex.DecodeString(TEST_MC_KEY_A)
 var keyBM, _ = hex.DecodeString(TEST_MC_KEY_B)
 
 /* Test Master Card merchant name hash */
-func TestMCardMerchantName(t *testing.T) {
-	b := merchantNameHashSha1(TEST_MC_MERCH_NAME)
+func TestMCardMerchantNameAAV(t *testing.T) {
+	b := merchantNameHashSPA(TEST_MC_MERCH_NAME)
 	if len(b) != 8 {
 		t.Fatalf("[MCARD]: Failed to generate merchant name SHA-1 hash\n")
 	}
@@ -40,7 +40,7 @@ func TestMCardMerchantName(t *testing.T) {
 	/* Convert to strring */
 	bs := hex.EncodeToString(b)
 	if !strings.EqualFold(bs, TEST_MC_RS_MNAME_SHA1_HASH) {
-		t.Fatalf("[MCARD]: Invalid tert VISA CAVV: %s\n\texpected: %s\n", bs, TEST_MC_RS_MNAME_SHA1_HASH)
+		t.Fatalf("[MCARD]: Invalid hash merchant name VISA CAVV: %s\n\texpected: %s\n", bs, TEST_MC_RS_MNAME_SHA1_HASH)
 	}
 }
 /* Test Master Card AVV CVC2 generation */
@@ -55,7 +55,7 @@ func TestMCardGenerationCVC2(t *testing.T) {
 }
 /* Test Master Card AVV */
 func TestMCardAvvGenerate(t *testing.T) {
-	_, err := GenerateMCardAav(TEST_MC_PAN_1,TEST_MC_CONTOL_BYTE,TEST_MC_MERCH_NAME,TEST_MC_ACS_ID,keyAM,keyBM)
+	_, err := GenerateMCardAAV(TEST_MC_PAN_1,TEST_MC_CONTOL_BYTE,TEST_MC_MERCH_NAME,TEST_MC_ACS_ID,keyAM,keyBM)
 	if err != nil {
 		t.Fatalf("Failed to generate MasterCard AVV: %s\n", err)
 	}

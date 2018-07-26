@@ -22,7 +22,7 @@ import (
 |          |                                   |        the result of Attempts          |                |             |
 |          |                                   |        processing                      |                |             |
 ------------------------------------------------------------------------------------------------------------------------
-|    2     | Hash of Merchant Name             | The left most 8 bytesof the SHA-1      |        8       |  Bytes 2-9  |
+|    2     | Hash of Merchant Name             | The left most 8 bytes of the SHA-1     |        8       |  Bytes 2-9  |
 |          |                                   | hash of the Merchant Name field from   |                |             |
 |          |                                   | the PAReq.                             |                |             |
 ------------------------------------------------------------------------------------------------------------------------
@@ -82,7 +82,7 @@ import (
 /********************************************************
   Helper function to create merchant name SHA-1 hash
 ********************************************************/
-func merchantNameHashSha1( merchName string )[]byte {
+func merchantNameHashSPA( merchName string )[]byte {
 	h := sha1.New()
 	h.Write([]byte(merchName))
 	bs := h.Sum(nil)
@@ -92,19 +92,24 @@ func merchantNameHashSha1( merchName string )[]byte {
 /********************************************************
   Generate Master Card AAV
 ********************************************************/
-func GenerateMCardAav( pan string, /* Primary Account Number (PAN) */
+func GenerateMCardAAV( pan string, /* Primary Account Number (PAN) */
 	cb uint8,   /* Control Byte (Format Version Number)*/
 	merchName string /* Merchant name*/,
 	acsId uint8 /* ACS Identifier */,
 	keyA, keyB []byte ) ([]byte, error) {
 
-	h := merchantNameHashSha1( merchName )
+	h := merchantNameHashSPA( merchName )
 	if len(h) != 8 {
-		return nil, fmt.Errorf("Failed to generate merchant name SHA-1 hash length: %d", len(pan))
+		return nil, fmt.Errorf("Failed to generate merchant name hash length: %d", len(h))
 	}
 
 	/* create AAV destination buffer (20 bytes) */
-	//aav := make([]byte, 20)
+	aav := make([]byte, 20)
+
+	/* Set control byte */
+	aav[0] = 0x8C
+	/* Set hash merchant name */
+	copy(aav[1:], h)
 
 	/* Set Authentication Results Code */
 	//aav[0] = dec2bcd(uint64(arc))[0]
