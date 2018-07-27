@@ -56,7 +56,7 @@ func TestVisaCavvGenerate(t *testing.T) {
 	/* Convert to strring */
 	scavv := hex.EncodeToString(cavv)
 	if scavv != TEST_V_RS_CAVV {
-		t.Fatalf("[VISA]: Invalid tert VISA CAVV: %s\n\texpected: %s\n", scavv, TEST_V_RS_CAVV)
+		t.Fatalf("[VISA]: Invalid test VISA CAVV: %s\n\texpected: %s\n", scavv, TEST_V_RS_CAVV)
 	}
 }
 /* Test VISA CAVV generation with random ATN */

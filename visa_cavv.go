@@ -123,7 +123,7 @@ Table D–7: Assembling CAVV Data Field
             • Second Factor: A value based on the result of Authentication Code Second Factor
                 Authentication. (2 digits)
 ******************************************************************************************/
-func generateVisaCavvOutput( pan, atn, scode string,  keyA, keyB []byte ) (int, error) {
+func generateVisaCVV2( pan, atn, scode string,  keyA, keyB []byte ) (int, error) {
 
     var cvv2 string = ""
 
@@ -233,7 +233,7 @@ func GenerateVisaCavv( pan string, /* Primary Account Number (PAN) */
     /* Create service code from Authentication Results Code & Second Factor */
     scode := fmt.Sprintf("%1d%02d", arc, sacode)
     /* Generate CAVV output */
-    cvv2,err := generateVisaCavvOutput(pan, atn[alen-4:], scode, keyA, keyB)
+    cvv2,err := generateVisaCVV2(pan, atn[alen-4:], scode, keyA, keyB)
     if err != nil {
         return nil, err
     }

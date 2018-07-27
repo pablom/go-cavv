@@ -3,6 +3,8 @@ package gocavv
 import (
 	"crypto/sha1"
 	"fmt"
+	"encoding/binary"
+	"strconv"
 )
 
 /*  SPA AAV Format for MasterCard’s Implementation of 3-D Secure:
@@ -26,7 +28,7 @@ import (
 |          |                                   | hash of the Merchant Name field from   |                |             |
 |          |                                   | the PAReq.                             |                |             |
 ------------------------------------------------------------------------------------------------------------------------
-|    3     | ACS Identifier                    | Allows an issuer to use up to 256      |        1       |   Byte 11,  |
+|    3     | ACS Identifier                    | Allows an issuer to use up to 256      |        1       |   Byte 10,  |
 |          |                                   | different ACS facilities.              |                |             |
 |          |                                   |                                        |                |             |
 |          |                                   | Values for this field are defined      |                |             |
@@ -89,14 +91,32 @@ func merchantNameHashSPA( merchName string )[]byte {
 	/* Return first 8 bytes, SHA-1 hash of Merchant Name */
 	return bs[:8]
 }
+
+func generateMCardMAC( pan string, /* Primary Account Number (PAN) */) ([]byte, error) {
+
+	mac := make([]byte, 25)
+
+	/* Convert PAN to int64 */
+	ipan, err := strconv.ParseUint(pan, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	/* Set PAN */
+	copy(mac, dec2bcd(ipan))
+
+}
 /********************************************************
   Generate Master Card AAV
 ********************************************************/
 func GenerateMCardAAV( pan string, /* Primary Account Number (PAN) */
-	cb uint8,   /* Control Byte (Format Version Number)*/
-	merchName string /* Merchant name*/,
-	acsId uint8 /* ACS Identifier */,
-	keyA, keyB []byte ) ([]byte, error) {
+			cb uint8,   		/* Control Byte (Format Version Number)*/
+			merchName string    /* Merchant name*/,
+			acsId uint8         /* ACS Identifier */,
+			authMethod uint8,   /* ACS Authentication Method */
+			keyId uint8,        /* BIN Key Identifier */
+			tsn uint32,         /* Transaction Sequence Number */
+			keyA, keyB []byte ) ([]byte, error) {
 
 	h := merchantNameHashSPA( merchName )
 	if len(h) != 8 {
@@ -107,12 +127,15 @@ func GenerateMCardAAV( pan string, /* Primary Account Number (PAN) */
 	aav := make([]byte, 20)
 
 	/* Set control byte */
-	aav[0] = 0x8C
+	aav[0] = cb
 	/* Set hash merchant name */
 	copy(aav[1:], h)
+	/* Set ACS Identifier */
+	aav[9] = acsId
+	/* Set authentication method & BIN key id */
+	aav[10] = authMethod << 4 + keyId
+	/* Set TSN */
+	binary.LittleEndian.PutUint32(aav[11:], tsn)
 
-	/* Set Authentication Results Code */
-	//aav[0] = dec2bcd(uint64(arc))[0]
-
-	return nil, nil
+	return aav, nil
 }

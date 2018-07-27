@@ -26,7 +26,7 @@ func dec2bcd(i uint64) []byte {
 		hi := i % 10
 		i /= 10
 		var x []byte
-		x = append(x, byte((hi & 0xf) << 4)|byte(low&0xf))
+		x = append(x, byte((hi & 0xf) << 4)|byte(low & 0xf))
 		bcd = append(x, bcd[:]...)
 	}
 	return bcd
