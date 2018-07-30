@@ -46,6 +46,7 @@ func TestMCardMerchantNameAAV(t *testing.T) {
 	}
 }
 /* Test Master Card AVV CVC2 generation */
+/*
 func TestMCardGenerationCVC2(t *testing.T) {
 	cvc2, err := generateVisaCavvOutput(TEST_MC_PAN_1,TEST_MC_ATN,TEST_MC_SERVICE_CODE, keyAM,keyBM)
 	if err != nil {
@@ -55,6 +56,7 @@ func TestMCardGenerationCVC2(t *testing.T) {
 		t.Fatalf("[MCARD]: Invalid AAV output (CVC2): [%d] expected: [%d]\n", cvc2, TEST_MC_CVV2)
 	}
 }
+*/
 /* Test Master Card AVV */
 func TestMCardAvvGenerate(t *testing.T) {
 	b, err := GenerateMCardAAV(TEST_MC_PAN_1,TEST_MC_CONTOL_BYTE,TEST_MC_MERCH_NAME,

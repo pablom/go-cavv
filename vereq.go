@@ -62,7 +62,7 @@ func PaResUnMarshalMessage(paresB64 string) (error) {
 	if err != nil {
 		return err
 	}
-
+/*
 	doc := etree.NewDocument()
 	n, err := doc.ReadFrom(r)
 	if err != nil {
@@ -70,9 +70,10 @@ func PaResUnMarshalMessage(paresB64 string) (error) {
 	}
 	doc.Indent(3)
 	doc.WriteTo(os.Stdout)
-
+*/
 	//io.Copy(os.Stdout, r)
 	// Output: hello, world
 	r.Close()
+	return nil
 }
 

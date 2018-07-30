@@ -92,7 +92,26 @@ func merchantNameHashSPA( merchName string )[]byte {
 	return bs[:8]
 }
 
-func generateMCardMAC( pan string, /* Primary Account Number (PAN) */) ([]byte, error) {
+func generateMCardMAC( pan string,       /* Primary Account Number (PAN) */
+                       cb uint8,         /* Control Byte (Format Version Number)*/
+	                   merchName string, /* Merchant name*/
+	                   acsId uint8,      /* ACS Identifier */
+	                   authMethod uint8, /* ACS Authentication Method */
+	                   keyId uint8,      /* BIN Key Identifier */
+	                   tsn uint32        /* Transaction Sequence Number */) ([]byte, error) {
+
+	/* Get PAN length */
+	plen := len(pan)
+
+	if plen < 13 || plen > 19 {
+		return nil, fmt.Errorf("Invalid Primary Account Number (PAN) length: %d", len(pan))
+	}
+
+
+	h := merchantNameHashSPA( merchName )
+	if len(h) != 8 {
+		return nil, fmt.Errorf("Failed to generate merchant name hash length: %d", len(h))
+	}
 
 	mac := make([]byte, 25)
 
@@ -104,7 +123,19 @@ func generateMCardMAC( pan string, /* Primary Account Number (PAN) */) ([]byte, 
 
 	/* Set PAN */
 	copy(mac, dec2bcd(ipan))
-
+	mac[8] = 0xFF
+	mac[9] = 0xFF
+	/* Set control byte */
+	mac[10] = cb
+	/* Set hash merchant name */
+	copy(mac[11:], h)
+	/* Set ACS Identifier */
+	mac[19] = acsId
+	/* Set authentication method & BIN key id */
+	mac[20] = authMethod << 4 + keyId
+	/* Set TSN */
+	binary.BigEndian.PutUint32(mac[21:], tsn)
+	return mac,nil
 }
 /********************************************************
   Generate Master Card AAV
@@ -117,6 +148,9 @@ func GenerateMCardAAV( pan string, /* Primary Account Number (PAN) */
 			keyId uint8,        /* BIN Key Identifier */
 			tsn uint32,         /* Transaction Sequence Number */
 			keyA, keyB []byte ) ([]byte, error) {
+
+	return generateMCardMAC(pan, cb, merchName, acsId,authMethod,keyId,tsn)
+
 
 	h := merchantNameHashSPA( merchName )
 	if len(h) != 8 {

@@ -31,7 +31,7 @@ var TEST_S_SERVICE_CODE = TEST_V_S_AUTH_RC + TEST_V_S_SECOND_ACODE
 
 
 func TestVisaCavvOutput(t *testing.T) {
-	cvv2, err := generateVisaCavvOutput(TEST_V_PAN_16, TEST_V_S_ATN[12:], TEST_S_SERVICE_CODE, keyAV, keyBV)
+	cvv2, err := generateVisaCVV2(TEST_V_PAN_16, TEST_V_S_ATN[12:], TEST_S_SERVICE_CODE, keyAV, keyBV)
 	if err != nil {
 		t.Fatalf("[VISA]: Failed to generate VISA CAVV output for PAN 16 digits: %s\n", err)
 	}
@@ -42,7 +42,7 @@ func TestVisaCavvOutput(t *testing.T) {
 }
 /* Test CAVV output generation with 20 digits PAN length */
 func TestVisaCavvOutputInvalidPanLen(t *testing.T) {
-	_, err := generateVisaCavvOutput(TEST_V_PAN_20, TEST_V_S_ATN[12:], TEST_S_SERVICE_CODE, keyAV, keyBV)
+	_, err := generateVisaCVV2(TEST_V_PAN_20, TEST_V_S_ATN[12:], TEST_S_SERVICE_CODE, keyAV, keyBV)
 	if err == nil {
 		t.Fatalf("[VISA]: Generate VISA CAVV output for PAN 20 digits\n")
 	}
