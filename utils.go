@@ -7,6 +7,7 @@ import (
 	"crypto/des"
 )
 
+
 func rangeIn(low, hi int) int {
 	rand.Seed(time.Now().Unix())
 	return low + rand.Intn(hi-low)
@@ -31,6 +32,30 @@ func dec2bcd(i uint64) []byte {
 	}
 	return bcd
 }
+/*
+func decodeBcd(bcd []byte) (x int, err error) {
+	for i, b := range bcd {
+		hi, lo := int(b>>4), int(b&0x0f)
+		if lo == 0x0f && i == len(bcd)-1 {
+			x = 10*x + hi
+			return
+		}
+		if hi > 9 || lo > 9 {
+			return 0, BadInput
+		}
+		x = 100*x + 10*hi + lo
+	}
+	return
+}
+
+func decodeBcd2(bcd []byte) (int, error) {
+	s := hex.EncodeToString(bcd)
+	if s[len(s)-1] == 'f' {
+		s = s[:len(s)-1]
+	}
+	return strconv.Atoi(s)
+}
+*/
 /********************************************************
   Helper function to create cipher from key byte array
 ********************************************************/

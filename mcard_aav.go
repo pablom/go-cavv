@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"encoding/binary"
 	"strconv"
+	"crypto/hmac"
 )
 
 /*  SPA AAV Format for MasterCard’s Implementation of 3-D Secure:
@@ -91,44 +92,65 @@ func merchantNameHashSPA( merchName string )[]byte {
 	/* Return first 8 bytes, SHA-1 hash of Merchant Name */
 	return bs[:8]
 }
+/********************************************************
+*  Helper function to add 0xFF padding to PAN buffer
+*  (20 bytes length)
+********************************************************/
+func appendPANpaddingMac(buf *[]byte, i int) {
+	n := 10 - i
+	for ; n > 0; n-- {
+		(*buf)[i] = 0xFF
+		i++
+	}
+}
+/********************************************************
+*  Helper function to generate MAC for HMAC-SHA1
+*  calculation
+********************************************************/
+func generateMCardMAC( pan string,        /* Primary Account Number (PAN)         */
+                       cb uint8,          /* Control Byte (Format Version Number) */
+	                   merchName *[]byte, /* Merchant name hash 8 bytes           */
+	                   acsId uint8,       /* ACS Identifier                       */
+	                   authMethod uint8,  /* ACS Authentication Method            */
+	                   keyId uint8,       /* BIN Key Identifier                   */
+	                   tsn uint32         /* Transaction Sequence Number */) ([]byte, error) {
 
-func generateMCardMAC( pan string,       /* Primary Account Number (PAN) */
-                       cb uint8,         /* Control Byte (Format Version Number)*/
-	                   merchName string, /* Merchant name*/
-	                   acsId uint8,      /* ACS Identifier */
-	                   authMethod uint8, /* ACS Authentication Method */
-	                   keyId uint8,      /* BIN Key Identifier */
-	                   tsn uint32        /* Transaction Sequence Number */) ([]byte, error) {
-
-	/* Get PAN length */
+	/* Get PAN length & padding length */
 	plen := len(pan)
+	padlen := plen %2
+	pblen := plen/2
 
 	if plen < 13 || plen > 19 {
 		return nil, fmt.Errorf("Invalid Primary Account Number (PAN) length: %d", len(pan))
 	}
 
-
-	h := merchantNameHashSPA( merchName )
-	if len(h) != 8 {
-		return nil, fmt.Errorf("Failed to generate merchant name hash length: %d", len(h))
-	}
-
 	mac := make([]byte, 25)
 
 	/* Convert PAN to int64 */
-	ipan, err := strconv.ParseUint(pan, 10, 64)
+	ipan, err := strconv.ParseUint(pan[:(plen-padlen)], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-
 	/* Set PAN */
 	copy(mac, dec2bcd(ipan))
-	mac[8] = 0xFF
-	mac[9] = 0xFF
+
+	/* If need haf byte 0x0F padding */
+	if padlen > 0 {
+		v, _ := strconv.ParseUint(pan[(plen-padlen):], 10, 8)
+		bm := dec2bcd(v)[0]
+		bm = (bm << 4) + 0x0F
+		//bm = bm << 4
+		//bm |= 0x0F
+		mac[pblen] = bm
+		pblen++
+	}
+	/* Add additional padding bytes 0xFF */
+	appendPANpaddingMac(&mac, pblen)
+
 	/* Set control byte */
 	mac[10] = cb
 	/* Set hash merchant name */
-	copy(mac[11:], h)
+	copy(mac[11:], *merchName)
 	/* Set ACS Identifier */
 	mac[19] = acsId
 	/* Set authentication method & BIN key id */
@@ -138,28 +160,49 @@ func generateMCardMAC( pan string,       /* Primary Account Number (PAN) */
 	return mac,nil
 }
 /********************************************************
+*  Helper function to generate HMAC-SHA1 of MAC
+********************************************************/
+func generateMCardHmacSha1(
+	pan string,        /* Primary Account Number (PAN)         */
+	cb uint8,          /* Control Byte (Format Version Number) */
+	merchName *[]byte, /* Merchant name hash 8 bytes           */
+	acsId uint8,       /* ACS Identifier                       */
+	authMethod uint8,  /* ACS Authentication Method            */
+	keyId uint8,       /* BIN Key Identifier                   */
+	tsn uint32,        /* Transaction Sequence Number          */
+	key []byte ) ([]byte, error) {
+
+	mac,err := generateMCardMAC(pan, cb, merchName, acsId, authMethod, keyId, tsn)
+	if err != nil {
+		return nil, err
+	}
+	/* Calculate HMAC-SHA1 hash */
+	h := hmac.New(sha1.New, key)
+	h.Write(mac)
+
+	return h.Sum(nil)[:5],nil
+}
+/********************************************************
   Generate Master Card AAV
 ********************************************************/
 func GenerateMCardAAV( pan string, /* Primary Account Number (PAN) */
-			cb uint8,   		/* Control Byte (Format Version Number)*/
-			merchName string    /* Merchant name*/,
-			acsId uint8         /* ACS Identifier */,
-			authMethod uint8,   /* ACS Authentication Method */
-			keyId uint8,        /* BIN Key Identifier */
-			tsn uint32,         /* Transaction Sequence Number */
+			cb uint8,   		   /* Control Byte (Format Version Number)*/
+			merchName string       /* Merchant name*/,
+			acsId uint8            /* ACS Identifier */,
+			authMethod uint8,      /* ACS Authentication Method */
+			keyId uint8,           /* BIN Key Identifier */
+			tsn uint32,            /* Transaction Sequence Number */
 			keyA, keyB []byte ) ([]byte, error) {
-
-	return generateMCardMAC(pan, cb, merchName, acsId,authMethod,keyId,tsn)
-
 
 	h := merchantNameHashSPA( merchName )
 	if len(h) != 8 {
 		return nil, fmt.Errorf("Failed to generate merchant name hash length: %d", len(h))
 	}
 
+	return generateMCardHmacSha1(pan, cb, &h, acsId, authMethod, keyId, tsn, keyA)
+
 	/* create AAV destination buffer (20 bytes) */
 	aav := make([]byte, 20)
-
 	/* Set control byte */
 	aav[0] = cb
 	/* Set hash merchant name */
