@@ -1,11 +1,8 @@
 package gocavv
 
 import (
-    "encoding/hex"
-    "fmt"
-    "strings"
-    "regexp"
-    "strconv"
+	"fmt"
+	"strconv"
 )
 
 /*
@@ -97,7 +94,6 @@ Table D–7: Assembling CAVV Data Field
 |          |                                   | and 3DS 2.0), IP address is zero       |                |             |
 |          |                                   | filled.                                |                |             |
 ------------------------------------------------------------------------------------------------------------------------
-
 */
 
 /****************************************************************************************
@@ -123,138 +119,48 @@ Table D–7: Assembling CAVV Data Field
             • Second Factor: A value based on the result of Authentication Code Second Factor
                 Authentication. (2 digits)
 ******************************************************************************************/
-func generateVisaCVV2( pan, atn, scode string,  keyA, keyB []byte ) (int, error) {
+func GenerateVisaCavv(pan string, /* Primary Account Number (PAN) */
+	iatn uint, /* 16-digit number ATN */
+	arc uint8, sacode, keyID uint8,
+	keyA, keyB []byte) ([]byte, error) {
 
-    var cvv2 string = ""
+	/* Check Authentication Results Code */
+	if arc > 9 || arc < 0 {
+		return nil, fmt.Errorf("Invalid Authentication Results Code: %d", arc)
+	}
+	/* Convert atn as integer to string */
+	atn := fmt.Sprintf("%d", iatn)
+	/* Calculate ATN string length */
+	alen := len(atn)
+	/* Check ATN length */
+	if alen != 16 {
+		return nil, fmt.Errorf("Invalid Authentication Tracking Number (ATN) length: %d, expected: 16", alen)
+	}
+	/* Create service code from Authentication Results Code & Second Factor */
+	scode := fmt.Sprintf("%1d%02d", arc, sacode)
+	/* Generate CVV2 output */
+	cvv2, err := generateCVV2(pan, atn[alen-4:], scode, keyA, keyB)
+	if err != nil {
+		return nil, err
+	}
 
-    /* Get PAN length */
-    plen := len(pan)
+	/* create CAVV destination buffer (20 bytes) */
+	cavv := make([]byte, 20)
+	/* Set Authentication Results Code */
+	cavv[0] = dec2bcd(uint64(arc))[0]
+	/* Set Second Factor Authentication Code */
+	cavv[1] = dec2bcd(uint64(sacode))[0]
+	/* Set CAVV Key Indicator */
+	cavv[2] = dec2bcd(uint64(keyID))[0]
+	/* Set CAVV output */
+	copy(cavv[3:], dec2bcd(uint64(cvv2))[:2])
+	/* Set Unpredictable Number */
+	atn4digit, _ := strconv.Atoi(atn[alen-4:])
+	copy(cavv[5:], dec2bcd(uint64(atn4digit))[:2])
+	/* Set ATN */
+	copy(cavv[7:], dec2bcd(uint64(iatn))[:8])
+	/* Set Version and Authentication Action */
+	cavv[15] = dec2bcd(uint64(0))[0]
 
-    if plen < 13 || plen > 19 {
-        return 0, fmt.Errorf("Invalid Primary Account Number (PAN) length: %d", len(pan))
-    }
-
-    if len(atn) != 4 {
-        return 0, fmt.Errorf("Invalid Authentication Tracking Number (ATN) length: %d, expected: 4", len(atn))
-    }
-
-    if len(scode) != 3 {
-        return 0, fmt.Errorf("Invalid Service Code length: %d, expected: 3", len(scode))
-    }
-
-    /* Create cipher from keyA */
-    cipherA, err := createKeyCipher(keyA)
-    if err != nil {
-        return 0, err
-    }
-    /* Create cipher from keyB */
-    cipherB, err := createKeyCipher(keyB)
-    if err != nil {
-        return 0, err
-    }
-
-    if plen > 16 {
-        pan = pan[len(pan)-16:]
-    } else if plen < 16 {
-        pan = pan + strings.Repeat("0", 16 - plen)
-    }
-
-    /* Place into 128-bit field padded to the right with binary zeros
-       decode PAN, ATN and service code to byte buffer */
-    src, err := hex.DecodeString(pan + atn + scode + strings.Repeat("0", 9))
-    if err != nil {
-        return 0, err
-    }
-
-    /* Split field into two 64-bit blocks */
-    block1 := src[:8]
-    block2 := src[8:]
-
-    /* create temporary destination buffer */
-    encBlock1 := make([]byte, 8)
-    /* Step 4: Using DES, encrypt Block 1 using Key A */
-    cipherA.Encrypt(encBlock1, block1)
-    /* Step 5: XOR the result of Step 4 with Block 2, then encrypt the XOR result with Key A */
-    for i := 0; i < 8; i++ {
-        block1[i] = encBlock1[i] ^ block2[i]
-    }
-    /* Step 5: using DES, encrypt the XOR result with Key A */
-    cipherA.Encrypt(encBlock1, block1)
-    /* Step 6: using DES, decrypt the result of step 5 with Key B */
-    cipherB.Decrypt(block1,encBlock1)
-    /* Step 7: Encrypt the result of Step 6 with Key A */
-    cipherA.Encrypt(encBlock1, block1)
-    /* Get HEX string from byte buffer */
-    hexs := hex.EncodeToString(encBlock1)
-    /* Step 8. Extract all digits from 0 through 9 from the result of Step 7 */
-    regDigit, err := regexp.Compile("[^0-9]+")
-    if err != nil {
-        return 0, err
-    }
-    digitStr := regDigit.ReplaceAllString(hexs, "")
-    /* Step 9: Extract the hexadecimal digits from the result of Step 7
-       and convert them to numerics by subtracting 10 from each */
-    regHex, err := regexp.Compile("[^a-fA-F]+")
-    if err != nil {
-        return 0, err
-    }
-    hexStr := regHex.ReplaceAllString(hexs, "")
-    for i := range hexStr {
-        r0, _ := strconv.ParseUint(string(hexStr[i]), 16, 0)
-        cvv2 += strconv.Itoa(int(r0 - 10))
-    }
-    /* Step 10: Concatenate the result of Step 9 to the result of Step 8 */
-    cvv2 = digitStr + cvv2
-    /* Step 11: Select the three left-most digits as the CVV2 Output */
-    icvv2,_:= strconv.Atoi(cvv2[:3])
-
-    return icvv2, nil
-}
-/****************************************************************************************
-
-******************************************************************************************/
-func GenerateVisaCavv( pan string, /* Primary Account Number (PAN) */
-            iatn uint, /* 16-digit number ATN */
-            arc uint8, sacode, keyId uint8,
-            keyA, keyB []byte ) ([]byte, error) {
-
-    /* Check Authentication Results Code */
-    if arc > 9 || arc < 0 {
-        return nil, fmt.Errorf("Invalid Authentication Results Code: %d", arc)
-    }
-    /* Convert atn as integer to string */
-    atn := fmt.Sprintf("%d", iatn)
-    /* Calculate ATN string length */
-    alen := len(atn)
-    /* Check ATN length */
-    if alen != 16 {
-        return nil, fmt.Errorf("Invalid Authentication Tracking Number (ATN) length: %d, expected: 16", alen)
-    }
-    /* Create service code from Authentication Results Code & Second Factor */
-    scode := fmt.Sprintf("%1d%02d", arc, sacode)
-    /* Generate CAVV output */
-    cvv2,err := generateVisaCVV2(pan, atn[alen-4:], scode, keyA, keyB)
-    if err != nil {
-        return nil, err
-    }
-
-    /* create CAVV destination buffer (20 bytes) */
-    cavv := make([]byte, 20)
-    /* Set Authentication Results Code */
-    cavv[0] = dec2bcd(uint64(arc))[0]
-    /* Set Second Factor Authentication Code */
-    cavv[1] = dec2bcd(uint64(sacode))[0]
-    /* Set CAVV Key Indicator */
-    cavv[2] = dec2bcd(uint64(keyId))[0]
-    /* Set CAVV output */
-    copy(cavv[3:], dec2bcd(uint64(cvv2))[:2])
-    /* Set Unpredictable Number */
-    atn4digit,_ := strconv.Atoi(atn[alen-4:])
-    copy(cavv[5:], dec2bcd(uint64(atn4digit))[:2])
-    /* Set ATN */
-    copy(cavv[7:], dec2bcd(uint64(iatn))[:8])
-    /* Set Version and Authentication Action */
-    cavv[15] = dec2bcd(uint64(0))[0]
-
-    return cavv,nil
+	return cavv, nil
 }
