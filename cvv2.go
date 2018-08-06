@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 )
-
+/**********************************************************
+*  Helper function to generate CVC2 for VISA & MasterCard
+***********************************************************/
 func generateCVV2(pan, atn, scode string, keyA, keyB []byte) (int, error) {
 
 	var cvv2 string
@@ -41,7 +43,7 @@ func generateCVV2(pan, atn, scode string, keyA, keyB []byte) (int, error) {
 	if plen > 16 {
 		pan = pan[len(pan)-16:]
 	} else if plen < 16 {
-		pan = pan + strings.Repeat("0", 16-plen)
+		pan = strings.Repeat("0", 16-plen) + pan
 	}
 
 	/* Place into 128-bit field padded to the right with binary zeros

@@ -99,7 +99,6 @@ func merchantNameHashSPA(merchName string) []byte {
 	/* Return first 8 bytes, SHA-1 hash of Merchant Name */
 	return bs[:8]
 }
-
 /********************************************************
 *  Helper function to add 0xFF padding to PAN buffer
 *  (20 bytes length)
@@ -111,17 +110,16 @@ func appendPANpaddingMac(buf *[]byte, i int) {
 		i++
 	}
 }
-
 /********************************************************
 *  Helper function to generate MAC for MasterCard AAV
 ********************************************************/
 func generateMasterCardMAC(
-	pan string, /* Primary Account Number (PAN)         */
-	cb uint8, /* Control Byte (Format Version Number) */
+	pan string,        /* Primary Account Number (PAN)         */
+	cb uint8,          /* Control Byte (Format Version Number) */
 	merchName *[]byte, /* Merchant name hash 8 bytes           */
-	acsID uint8, /* ACS Identifier                       */
-	authMethod uint8, /* ACS Authentication Method            */
-	keyID uint8, /* BIN Key Identifier                   */
+	acsID uint8,       /* ACS Identifier                       */
+	authMethod uint8,  /* ACS Authentication Method            */
+	keyID uint8,       /* BIN Key Identifier                   */
 	tsn uint32 /* Transaction Sequence Number */) ([]byte, error) {
 
 	/* Get PAN length & padding length */
@@ -168,18 +166,19 @@ func generateMasterCardMAC(
 	binary.BigEndian.PutUint32(mac[21:], tsn)
 	return mac, nil
 }
-
 /********************************************************
   Generate Master Card AAV
 ********************************************************/
 func GenerateMasterCardAAV(macType MasterCardMacType, /* MAC type */
-	pan string, /* Primary Account Number (PAN) */
-	cb uint8, /* Control Byte (Format Version Number)*/
+	pan string,       /* Primary Account Number (PAN) */
+	cb uint8,         /* Control Byte (Format Version Number)*/
 	merchName string, /* Merchant name*/
-	acsID uint8, /* ACS Identifier */
+	acsID uint8,      /* ACS Identifier */
 	authMethod uint8, /* ACS Authentication Method */
-	keyID uint8, /* BIN Key Identifier */
-	tsn uint32, /* Transaction Sequence Number */
+	keyID uint8,      /* BIN Key Identifier */
+	tsn uint32,       /* Transaction Sequence Number */
+	atn *string,
+	scode *string,
 	keyA, keyB []byte) ([]byte, error) {
 
 	if keyID > 0x0F {
@@ -215,7 +214,13 @@ func GenerateMasterCardAAV(macType MasterCardMacType, /* MAC type */
 		copy(aav[15:], h.Sum(nil)[:5])
 
 	} else if macType == MC_CVC2 {
-
+		/* Generate CVC2 */
+		cvc2, err := generateCVV2(pan, *atn, *scode, keyA, keyB)
+		if err != nil {
+			return nil, err
+		}
+		/* Add CVC2 */
+		copy(aav[15:], dec2bcd(uint64(cvc2)))
 	}
 
 	return aav, nil
