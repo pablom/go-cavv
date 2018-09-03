@@ -24,7 +24,7 @@ const (
 /*****************************************************************/
 /*     Test Master Card merchant name hash                       */
 /*****************************************************************/
-func TestMCardMerchantNameHashSPA(t *testing.T) {
+func TestMCard_MerchantNameHashSPA(t *testing.T) {
 
 	merchNameHash := "7CA7FBB6058B5114"
 

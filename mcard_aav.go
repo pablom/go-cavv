@@ -89,9 +89,9 @@ const (
 	MC_CVC2      MasterCardMacType = 1
 )
 
-/********************************************************
-  Helper function to create merchant name SHA-1 hash
-********************************************************/
+// =============================================================================
+//  Helper function to create merchant name SHA-1 hash
+// =============================================================================
 func merchantNameHashSPA(merchName string) []byte {
 	h := sha1.New()
 	h.Write([]byte(merchName))
@@ -99,10 +99,10 @@ func merchantNameHashSPA(merchName string) []byte {
 	/* Return first 8 bytes, SHA-1 hash of Merchant Name */
 	return bs[:8]
 }
-/********************************************************
-*  Helper function to add 0xFF padding to PAN buffer
-*  (20 bytes length)
-********************************************************/
+// =============================================================================
+//  Helper function to add 0xFF padding to PAN buffer
+//  (20 bytes length)
+// =============================================================================
 func appendPANpaddingMac(buf *[]byte, i int) {
 	n := 10 - i
 	for ; n > 0; n-- {
@@ -111,9 +111,42 @@ func appendPANpaddingMac(buf *[]byte, i int) {
 	}
 }
 /********************************************************
-*  Helper function to generate MAC for MasterCard AAV
+*  Helper function to add PAN to mac buffer
 ********************************************************/
-func generateMasterCardMAC(
+func appendMasterCardPANtoMacBuffer(mac *[]byte, pan string) error {
+	// Get PAN length & padding length
+	plen := len(pan)
+	padlen := plen % 2
+	pblen := plen / 2
+
+	if plen < 13 || plen > 19 {
+		return fmt.Errorf("Invalid Primary Account Number (PAN) length: %d", len(pan))
+	}
+	// Convert PAN to int64
+	ipan, err := strconv.ParseUint(pan[:(plen-padlen)], 10, 64)
+	if err != nil {
+		return err
+	}
+	// Set PAN
+	copy(*mac, dec2bcd(ipan))
+	// If need haf byte 0x0F padding
+	if padlen > 0 {
+		v, _ := strconv.ParseUint(pan[(plen-padlen):], 10, 8)
+		bm := dec2bcd(v)[0]
+		bm = (bm << 4) + 0x0F
+		//bm = bm << 4
+		//bm |= 0x0F
+		(*mac)[pblen] = bm
+		pblen++
+	}
+	// Add additional padding bytes 0xFF
+	appendPANpaddingMac(mac, pblen)
+	return nil
+}
+// =============================================================================
+//  Helper function to generate MAC for MasterCard AAV
+// =============================================================================
+func generateMasterCardMACSPA1(
 	pan string,        /* Primary Account Number (PAN)         */
 	cb uint8,          /* Control Byte (Format Version Number) */
 	merchName *[]byte, /* Merchant name hash 8 bytes           */
@@ -122,53 +155,27 @@ func generateMasterCardMAC(
 	keyID uint8,       /* BIN Key Identifier                   */
 	tsn uint32 /* Transaction Sequence Number */) ([]byte, error) {
 
-	/* Get PAN length & padding length */
-	plen := len(pan)
-	padlen := plen % 2
-	pblen := plen / 2
-
-	if plen < 13 || plen > 19 {
-		return nil, fmt.Errorf("Invalid Primary Account Number (PAN) length: %d", len(pan))
-	}
-
+	// Create MAC slice
 	mac := make([]byte, 25)
-
-	/* Convert PAN to int64 */
-	ipan, err := strconv.ParseUint(pan[:(plen-padlen)], 10, 64)
-	if err != nil {
+	// Append PAN to MAC buffer
+	if err := appendMasterCardPANtoMacBuffer(&mac, pan); err != nil {
 		return nil, err
 	}
-	/* Set PAN */
-	copy(mac, dec2bcd(ipan))
-
-	/* If need haf byte 0x0F padding */
-	if padlen > 0 {
-		v, _ := strconv.ParseUint(pan[(plen-padlen):], 10, 8)
-		bm := dec2bcd(v)[0]
-		bm = (bm << 4) + 0x0F
-		//bm = bm << 4
-		//bm |= 0x0F
-		mac[pblen] = bm
-		pblen++
-	}
-	/* Add additional padding bytes 0xFF */
-	appendPANpaddingMac(&mac, pblen)
-
-	/* Set control byte */
+	// Set control byte
 	mac[10] = cb
-	/* Set hash merchant name */
+	// Set hash merchant name
 	copy(mac[11:], *merchName)
-	/* Set ACS Identifier */
+	// Set ACS Identifier
 	mac[19] = acsID
-	/* Set authentication method & BIN key id */
+	// Set authentication method & BIN key id
 	mac[20] = authMethod<<4 + keyID
-	/* Set TSN */
+	// Set TSN
 	binary.BigEndian.PutUint32(mac[21:], tsn)
 	return mac, nil
 }
-/********************************************************
-  Generate Master Card AAV
-********************************************************/
+// =============================================================================
+//  Generate Master Card AAV
+// =============================================================================
 func GenerateMasterCardAAV(macType MasterCardMacType, /* MAC type */
 	pan string,       /* Primary Account Number (PAN) */
 	cb uint8,         /* Control Byte (Format Version Number)*/
@@ -189,37 +196,37 @@ func GenerateMasterCardAAV(macType MasterCardMacType, /* MAC type */
 		return nil, fmt.Errorf("Invalid ACS Authentication Method, more than 0x0F: %d", authMethod)
 	}
 
-	/* Create merchant name hash */
+	// Create merchant name hash
 	hmn := merchantNameHashSPA(merchName)
 	if len(hmn) != 8 {
 		return nil, fmt.Errorf("Failed to generate merchant name hash length: %d", len(hmn))
 	}
 
-	/* Generate MAC for HMAC-SHA1 */
-	mac, err := generateMasterCardMAC(pan, cb, &hmn, acsID, authMethod, keyID, tsn)
+	// Generate MAC for HMAC-SHA1
+	mac, err := generateMasterCardMACSPA1(pan, cb, &hmn, acsID, authMethod, keyID, tsn)
 	if err != nil {
 		return nil, err
 	}
 
-	/* create AAV destination buffer (20 bytes) */
+	// create AAV destination buffer (20 bytes)
 	aav := make([]byte, 20)
-	/* Set generated mac to result AAV buffer with 10 bytes skipping */
+	// Set generated mac to result AAV buffer with 10 bytes skipping
 	copy(aav, mac[10:])
 
 	if macType == MC_HMAC_SHA1 {
-		/* Calculate HMAC-SHA1 hash */
+		// Calculate HMAC-SHA1 hash
 		h := hmac.New(sha1.New, keyA)
 		h.Write(mac)
-		/* Set last 5 bytes to result AAV buffer */
+		// Set last 5 bytes to result AAV buffer
 		copy(aav[15:], h.Sum(nil)[:5])
 
 	} else if macType == MC_CVC2 {
-		/* Generate CVC2 */
+		// Generate CVC2
 		cvc2, err := generateCVV2(pan, *atn, *scode, keyA, keyB)
 		if err != nil {
 			return nil, err
 		}
-		/* Add CVC2 */
+		// Add CVC2
 		copy(aav[15:], dec2bcd(uint64(cvc2)))
 	}
 

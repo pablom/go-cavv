@@ -96,70 +96,70 @@ Table D–7: Assembling CAVV Data Field
 ------------------------------------------------------------------------------------------------------------------------
 */
 
-/****************************************************************************************
-    VISA: to calculate CAVV value (using CVV2 with ATN)
-
-    pan - Primary Account Number (PAN) The value that was received in the
-          authentication request message (VEReq, AReq) from the merchant as
-          the Cardholder PAN (16 digits). This same card number will be submitted
-          in the authorization message. Length
-            • If the PAN is Less than 16 digits—The PAN must be right justified and
-              padded on the left with zeros to a total of 16 digits.
-            • If the PAN is Greater than 16 digits—Only the rightmost 16 digits of
-              the PAN must be used.
-          (13-19 digits)
-
-    atn - The four least significant digits of the 4 digits Authentication Tracking Number (ATN).
-          (4 digits)
-
-    scode - Service Code (2 fields) (3 digits)
-            • Authentication Results Code: A value based on the Transaction Status as provided in
-                PARes, ARes,or RReq. Converting Transaction Status to Authentication Results Code
-                for the conversion. (1 digit)
-            • Second Factor: A value based on the result of Authentication Code Second Factor
-                Authentication. (2 digits)
-******************************************************************************************/
+// ===================================================================================================
+//  VISA: to calculate CAVV value (using CVV2 with ATN)
+//
+//  pan - Primary Account Number (PAN) The value that was received in the
+//        authentication request message (VEReq, AReq) from the merchant as
+//        the Cardholder PAN (16 digits). This same card number will be submitted
+//        in the authorization message. Length
+//        • If the PAN is Less than 16 digits—The PAN must be right justified and
+//          padded on the left with zeros to a total of 16 digits.
+//        • If the PAN is Greater than 16 digits—Only the rightmost 16 digits of
+//          the PAN must be used.
+//          (13-19 digits)
+//
+//  atn - The four least significant digits of the 4 digits Authentication Tracking Number (ATN).
+//        (4 digits)
+//
+//  scode - Service Code (2 fields) (3 digits)
+//          • Authentication Results Code: A value based on the Transaction Status as provided in
+//            PARes, ARes,or RReq. Converting Transaction Status to Authentication Results Code
+//            for the conversion. (1 digit)
+//          • Second Factor: A value based on the result of Authentication Code Second Factor
+//            Authentication. (2 digits)
+// ==================================================================================================
 func GenerateVisaCavv(pan string, /* Primary Account Number (PAN) */
 	iatn uint, /* 16-digit number ATN */
 	arc uint8, sacode, keyID uint8,
 	keyA, keyB []byte) ([]byte, error) {
 
-	/* Check Authentication Results Code */
+	// Check Authentication Results Code
 	if arc > 9 || arc < 0 {
 		return nil, fmt.Errorf("Invalid Authentication Results Code: %d", arc)
 	}
-	/* Convert atn as integer to string */
+	// Convert atn as integer to string
 	atn := fmt.Sprintf("%d", iatn)
-	/* Calculate ATN string length */
+	// Calculate ATN string length
 	alen := len(atn)
-	/* Check ATN length */
+	// Check ATN length
 	if alen != 16 {
 		return nil, fmt.Errorf("Invalid Authentication Tracking Number (ATN) length: %d, expected: 16", alen)
 	}
-	/* Create service code from Authentication Results Code & Second Factor */
+	// Create service code from Authentication Results Code & Second Factor
 	scode := fmt.Sprintf("%1d%02d", arc, sacode)
-	/* Generate CVV2 output */
+	// Generate CVV2 output
 	cvv2, err := generateCVV2(pan, atn[alen-4:], scode, keyA, keyB)
 	if err != nil {
 		return nil, err
 	}
 
-	/* create CAVV destination buffer (20 bytes) */
+	// create CAVV destination buffer (20 bytes)
 	cavv := make([]byte, 20)
-	/* Set Authentication Results Code */
+	// Set Authentication Results Code
 	cavv[0] = dec2bcd(uint64(arc))[0]
-	/* Set Second Factor Authentication Code */
+	// Set Second Factor Authentication Code
 	cavv[1] = dec2bcd(uint64(sacode))[0]
-	/* Set CAVV Key Indicator */
+	// Set CAVV Key Indicator
 	cavv[2] = dec2bcd(uint64(keyID))[0]
-	/* Set CAVV output */
+	// Set CAVV output
 	copy(cavv[3:], dec2bcd(uint64(cvv2))[:2])
-	/* Set Unpredictable Number */
+	// Set Unpredictable Number
 	atn4digit, _ := strconv.Atoi(atn[alen-4:])
 	copy(cavv[5:], dec2bcd(uint64(atn4digit))[:2])
-	/* Set ATN */
+	// Set ATN
 	copy(cavv[7:], dec2bcd(uint64(iatn))[:8])
-	/* Set Version and Authentication Action */
+	// Set Version and Authentication Action
 	cavv[15] = dec2bcd(uint64(0))[0]
 
 	return cavv, nil
